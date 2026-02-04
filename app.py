@@ -16,6 +16,7 @@ from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formataddr
 
 import tempfile
 
@@ -196,7 +197,7 @@ def generate_pdf(row: dict) -> bytes:
 def send_email(recipient: str, pdf_bytes: bytes, filename: str):
     """Send *pdf_bytes* as an attachment via Gmail SMTP."""
     msg = MIMEMultipart()
-    msg["From"]    = GMAIL_SENDER
+    msg["From"]    = formataddr((GMAIL_SENDER, GMAIL_SENDER))
     msg["To"]      = recipient
     msg["Subject"] = EMAIL_SUBJECT
     msg.attach(MIMEText(EMAIL_BODY, "plain"))
