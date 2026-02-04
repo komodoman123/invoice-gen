@@ -1,0 +1,7 @@
+streamlit
+pandas
+python-docx
+docx2pdf
+pywin32
+python-dotenv
+num2words
