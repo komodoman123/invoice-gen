@@ -60,9 +60,11 @@ for _i in range(1, 7):
 
 # Gmail  ─  reads from .env (see .env.example)
 try:                                            # Streamlit Cloud
+    GMAIL_LOGIN        = st.secrets["GMAIL_LOGIN"]
     GMAIL_SENDER       = st.secrets["GMAIL_SENDER"]
     GMAIL_APP_PASSWORD = st.secrets["GMAIL_APP_PASSWORD"]
 except Exception:                               # local .env
+    GMAIL_LOGIN        = os.getenv("GMAIL_LOGIN", "")
     GMAIL_SENDER       = os.getenv("GMAIL_SENDER", "")
     GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
 
@@ -207,7 +209,7 @@ def send_email(recipient: str, pdf_bytes: bytes, filename: str):
 
     with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as srv:
         srv.starttls()
-        srv.login(GMAIL_SENDER, GMAIL_APP_PASSWORD)
+        srv.login(GMAIL_LOGIN, GMAIL_APP_PASSWORD)
         srv.send_message(msg)
 
 
@@ -223,7 +225,7 @@ if not os.path.exists(DOCX_TEMPLATE):
     st.error(f"Template not found: `{DOCX_TEMPLATE}`")
     st.stop()
 
-if not GMAIL_SENDER or not GMAIL_APP_PASSWORD:
+if not GMAIL_LOGIN or not GMAIL_SENDER or not GMAIL_APP_PASSWORD:
     st.warning(
         "Gmail not configured — sending is disabled.  "
         "Add credentials to `.env` (see `.env.example`)."
@@ -311,7 +313,7 @@ if st.session_state.get("generated"):
 
 # — generate & send ──
 if c2.button("Generate & Send Emails", use_container_width=True):
-    if not GMAIL_SENDER or not GMAIL_APP_PASSWORD:
+    if not GMAIL_LOGIN or not GMAIL_SENDER or not GMAIL_APP_PASSWORD:
         st.error("Gmail not configured — check `.env`.")
     else:
         with st.spinner("Sending emails..."):
