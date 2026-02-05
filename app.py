@@ -40,6 +40,7 @@ load_dotenv()
 
 DOCX_TEMPLATE = "template.docx"  # your template file
 EMAIL_COLUMN  = "E-mail"                          # CSV column with recipient addresses
+CC_COLUMN     = "CC"                              # CSV column with CC addresses (separated by ;)
 
 # Marker name (docx)  →  Column name (CSV)
 # Adjust the RIGHT side to match your actual sheet headers.
@@ -249,11 +250,13 @@ def _build_email_body(row: dict) -> str:
             .replace("{{Total}}",         "Rp " + fmt_idr(total)))
 
 
-def send_email(recipient: str, pdf_bytes: bytes, filename: str, body: str):
+def send_email(recipient: str, pdf_bytes: bytes, filename: str, body: str, cc: list[str] | None = None):
     """Send *pdf_bytes* as an attachment via Gmail SMTP."""
     msg = MIMEMultipart()
     msg["From"]    = formataddr((EMAIL_SENDER_NAME, GMAIL_SENDER))
     msg["To"]      = recipient
+    if cc:
+        msg["Cc"] = ", ".join(cc)
     msg["Subject"] = EMAIL_SUBJECT
     msg.attach(MIMEText(body, "plain"))
 
@@ -382,11 +385,12 @@ if c2.button("Generate & Send Emails", use_container_width=True):
                 inv_no = safe(row, COLUMNS.get("No. Invoice", "No. Invoice")) or f"invoice_{idx}"
                 client = safe(row, _client_col) or f"client_{idx}"
                 name   = f"{inv_no} - {client}"
+                cc = [addr.strip() for addr in safe(row, CC_COLUMN).split(";") if addr.strip()]
                 if not recipient:
                     results.append(("error", f"Row {idx} ({name}): no email address"))
                     continue
                 try:
-                    send_email(recipient, generate_pdf(row), name, _build_email_body(row))
+                    send_email(recipient, generate_pdf(row), name, _build_email_body(row), cc=cc or None)
                     results.append(("success", recipient))
                 except Exception as exc:
                     results.append(("error", f"{recipient}: {exc}"))
