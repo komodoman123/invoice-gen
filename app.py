@@ -69,8 +69,45 @@ except Exception:                               # local .env
     GMAIL_SENDER       = os.getenv("GMAIL_SENDER", "")
     GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
 
-EMAIL_SUBJECT = "Invoice"
-EMAIL_BODY    = "Hi,\n\nPlease find your invoice attached.\n\nBest regards"
+EMAIL_SENDER_NAME = "Finance MBP Works"
+EMAIL_SUBJECT     = "Invoice"
+EMAIL_BODY    = """\
+Hi {{Client}},
+
+Just a quick note to follow up on Invoice {{No. Invoice}}, which was sent on \
+{{Invoice Date}} totaling {{Total}}. The invoice is scheduled to be due on {{Due Date}}.
+
+We're happy to assist with any questions or resend the invoice if needed\
+—feel free to reply or give us a call. Your prompt attention to this would be \
+greatly appreciated to keep things running smoothly.
+
+For billing documents with a value above Rp 5,000,000, a duty stamp will be applied. \
+If this document does not yet include the duty stamp, we will send an updated version \
+with the stamp affixed.
+
+Thanks so much for your partnership.
+
+\u2014
+
+Hi {{Client}},
+
+Kami ingin mengingatkan kembali terkait Invoice {{No. Invoice}} yang telah kami \
+kirimkan pada {{Invoice Date}} dengan total {{Total}}. Berdasarkan catatan kami, \
+invoice tersebut dijadwalkan jatuh tempo pada {{Due Date}}.
+
+Apabila invoice sudah diproses atau terdapat hal yang perlu dikonfirmasi, silakan \
+informasikan kepada kami. Jika diperlukan, kami juga dengan senang hati dapat \
+mengirimkan ulang invoice tersebut.
+
+Sebagai informasi, untuk dokumen penagihan dengan nilai di atas Rp 5.000.000 akan \
+dibubuhi meterai. Apabila invoice ini belum dilengkapi dengan meterai, kami akan \
+mengirimkan versi terbaru yang telah dibubuhi meterai.
+
+Terima kasih atas perhatian dan kerja samanya.
+
+\u2014
+Warm regards,
+Finance MBP Works"""
 
 
 # ============================================================
@@ -194,13 +231,31 @@ def generate_pdf(row: dict) -> bytes:
 # email
 # ============================================================
 
-def send_email(recipient: str, pdf_bytes: bytes, filename: str):
+def _build_email_body(row: dict) -> str:
+    """Fill EMAIL_BODY placeholders from a CSV row."""
+    total = 0.0
+    for i in range(1, 7):
+        if safe(row, COLUMNS.get(f"Service {i}", "")):
+            try:
+                total += (float(safe(row, COLUMNS.get(f"Qty {i}",   "")) or 0)
+                        * float(safe(row, COLUMNS.get(f"Price {i}", "")) or 0))
+            except ValueError:
+                pass
+    return (EMAIL_BODY
+            .replace("{{Client}}",        safe(row, COLUMNS.get("Client",        "Client")))
+            .replace("{{No. Invoice}}",   safe(row, COLUMNS.get("No. Invoice",   "No. Invoice")))
+            .replace("{{Invoice Date}}", safe(row, COLUMNS.get("Invoice Date",  "Invoice Date")))
+            .replace("{{Due Date}}",      safe(row, COLUMNS.get("Due Date",      "Due Date")))
+            .replace("{{Total}}",         "Rp " + fmt_idr(total)))
+
+
+def send_email(recipient: str, pdf_bytes: bytes, filename: str, body: str):
     """Send *pdf_bytes* as an attachment via Gmail SMTP."""
     msg = MIMEMultipart()
-    msg["From"]    = formataddr((GMAIL_SENDER, GMAIL_SENDER))
+    msg["From"]    = formataddr((EMAIL_SENDER_NAME, GMAIL_SENDER))
     msg["To"]      = recipient
     msg["Subject"] = EMAIL_SUBJECT
-    msg.attach(MIMEText(EMAIL_BODY, "plain"))
+    msg.attach(MIMEText(body, "plain"))
 
     part = MIMEBase("application", "octet-stream")
     part.set_payload(pdf_bytes)
@@ -299,7 +354,9 @@ if c1.button("Generate PDFs", use_container_width=True):
         gen = {}
         for idx in selected:
             row  = df.iloc[idx].to_dict()
-            name = (safe(row, _client_col) or f"invoice_{idx}").replace(" ", "_")
+            inv_no = safe(row, COLUMNS.get("No. Invoice", "No. Invoice")) or f"invoice_{idx}"
+            client = safe(row, _client_col) or f"client_{idx}"
+            name   = f"{inv_no} - {client}"
             gen[idx] = (name, generate_pdf(row))
         st.session_state["generated"] = gen
     st.success(f"{len(gen)} PDF(s) ready.")
@@ -322,12 +379,14 @@ if c2.button("Generate & Send Emails", use_container_width=True):
             for idx in selected:
                 row       = df.iloc[idx].to_dict()
                 recipient = safe(row, EMAIL_COLUMN)
-                name      = (safe(row, _client_col) or f"invoice_{idx}").replace(" ", "_")
+                inv_no = safe(row, COLUMNS.get("No. Invoice", "No. Invoice")) or f"invoice_{idx}"
+                client = safe(row, _client_col) or f"client_{idx}"
+                name   = f"{inv_no} - {client}"
                 if not recipient:
                     results.append(("error", f"Row {idx} ({name}): no email address"))
                     continue
                 try:
-                    send_email(recipient, generate_pdf(row), name)
+                    send_email(recipient, generate_pdf(row), name, _build_email_body(row))
                     results.append(("success", recipient))
                 except Exception as exc:
                     results.append(("error", f"{recipient}: {exc}"))
